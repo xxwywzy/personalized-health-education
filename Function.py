@@ -165,7 +165,6 @@ def CompoundWord(segTextList,compoundT=3):
             
     output += u"%s n\n" % word
     output = output[:-1]
-    print(output)
     
     tmp_userdict = r"./Dictionary/tmp_compoundword_Dictionary.txt"
     openDictFile = open(tmp_userdict,"wb")

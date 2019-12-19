@@ -3,9 +3,11 @@
 from gensim.models.word2vec import Word2Vec
 import numpy as np
 import jieba
+import jieba.analyse
 import os
 from algorithm import KeywordExtraction
 import pandas as pd
+import ast
 
 # 读取模型
 global model1
@@ -38,7 +40,6 @@ def initial_vec():
     "冠心病": 0,
     "高血脂": 0,
     "皮肤病": 0,
-    "心血管病": 0,
     "肾病": 0,
     "眼病": 0,
     "肺病": 0,
@@ -154,60 +155,62 @@ def generate_input(text,mode=0,weight=0,keywordNum=5):
 # 处理文本库
 def preprocess_corpus(path):
     filelist = os.listdir(path)
-    keyword_total_list = []
+    improved_textrank_total_list = []
+    improved_tfidf_total_list = []
+    original_tfidf_total_list = []
+    original_textrank_total_list = []
     item_list = []
-    tag_total_list = []
+    filelist.sort()
     for item in filelist:
         if item.endswith('txt'):
             src = os.path.join(os.path.abspath(path), item)
             text_str = preprocess_text(src)
-            tag_list = list(jieba.analyse.textrank(text_str, topK=5)) # 先执行原始的算法，防止之后的自定义词典的影响
-            tag_total_list.append(tag_list)
-            inputDict = generate_input(text_str)
-            keyword_list = KeywordExtraction(inputDict) # 会把组合词放到词典
-            keyword_total_list.append(keyword_list)
+            tr = jieba.analyse.TextRank()
+            tr.span = 2
+            original_textrank_list = list(tr.textrank(text_str, topK=5)) #停用词词典和idf词典使用默认，不共享（原始tfidf效果很差）
+            original_tfidf_list = list(jieba.analyse.extract_tags(text_str, topK=5)) # 先执行原始的算法，防止之后的自定义词典的影响 
+            original_textrank_total_list.append(original_textrank_list)
+            original_tfidf_total_list.append(original_tfidf_list)
+            inputDict_textrank = generate_input(text_str,mode=0)
+            inputDict_tfidf = generate_input(text_str,mode=1)
+            improved_textrank_list = KeywordExtraction(inputDict_textrank) # 会把组合词放到词典
+            improved_tfidf_list = KeywordExtraction(inputDict_tfidf) # 会把组合词放到词典
+            improved_textrank_total_list.append(improved_textrank_list)
+            improved_tfidf_total_list.append(improved_tfidf_list)
             item_list.append(item)
             # tag_list = calculate_tag_list(keyword_list)
-            # print(item, "关键词：", keyword_list, tag_list)
+            print(item, "关键词：", improved_textrank_list)
     # print(len(item_list),len(keyword_total_list))
-    df = pd.DataFrame({'文本': item_list, '关键词': keyword_total_list,'原始textrank': tag_total_list})
-    df.to_csv("test_text_100_new.csv",index=True)
+    df = pd.DataFrame({'text': item_list, 'improved_textrank': improved_textrank_total_list,'original_textrank': original_textrank_total_list, 
+        'improved_tfidf': improved_tfidf_total_list,'original_tfidf': original_tfidf_total_list})
+    df.to_csv("test_text_100_newest.csv",index=False)
 
-# 基于生成的文本关键词列表与患者向量列表计算内积
-def generate_product_results(text_path, patient_path):
+
+def generate_product_results(text_path, patient_path, method):
     df_text = pd.read_csv(text_path)
     df_patient = pd.read_csv(patient_path)
-    df_patient.pop('患者描述')
+#     df_patient.pop('患者描述')
     patient_list = df_patient.values.tolist()
     for item in patient_list:
         product_list = []
+        index_list = []
         patient_vec = item[1:]
         patient_no = item[0]
         for index,row in df_text.iterrows():
-            keyword_list = ast.literal_eval(row['关键词'])
+            keyword_list = ast.literal_eval(row[method])
             text_vec = calculate_text_vec(keyword_list)
-            product = calculate_inner_product_new(patient_vec,text_vec)
+            product = calculate_inner_product_new(patient_vec,text_vec) #内积的精度有限
             product_list.append(product)
+            index_list.append(index)
+        df_text['文本编号'] = index_list
         df_text['患者'+str(patient_no)] = product_list
-    df_text.to_csv("patient.csv",index=False)
-
-# 基于生成的文本关键词列表与患者向量列表计算内积（原始textrank算法）
-def generate_product_results_original(text_path, patient_path):
-    df_text = pd.read_csv(text_path)
-    df_patient = pd.read_csv(patient_path)
-    df_patient.pop('患者描述')
-    patient_list = df_patient.values.tolist()
-    for item in patient_list:
-        product_list = []
-        patient_vec = item[1:]
-        patient_no = item[0]
-        for index,row in df_text.iterrows():
-            keyword_list = ast.literal_eval(row['原始textrank'])
-            text_vec = calculate_text_vec(keyword_list)
-            product = calculate_inner_product_new(patient_vec,text_vec)
-            product_list.append(product)
-        df_text['患者'+str(patient_no)] = product_list
-    df_text.to_csv("patient_original.csv",index=False)
+    df_text.pop('text')
+    df_text.pop('original_tfidf')
+    df_text.pop('original_textrank')
+    df_text.pop('improved_tfidf')
+    df_text.pop('improved_textrank')
+    df_text.pop('manual')
+    df_text.to_csv("patient_text_result_"+ method + ".csv",index=False)
 
     
 

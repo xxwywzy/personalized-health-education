@@ -7,7 +7,7 @@ import chardet
 from Function import *
 
 # TextRank 词矩阵运算
-def combine(word_list,windows = 5):
+def combine(word_list,windows = 2):
     
     if windows < 2: windows = 2
     for x in range(1,windows):
@@ -17,7 +17,7 @@ def combine(word_list,windows = 5):
         for r in res:
             yield r
             
-def ImproveTextRank(text,keywordNum,weight,windows = 5,blackwordFile = r"./Dictionary/keywordBlackList.txt"):
+def ImproveTextRank(text,keywordNum,weight,windows = 2,blackwordFile = r"./Dictionary/keywordBlackList.txt"):
     
     segResult = SegText(text)
     TF_Value = GetWordPara(segResult).copy()
